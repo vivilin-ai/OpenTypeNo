@@ -18,6 +18,14 @@ mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 cp "$BUILD_DIR/TypeNo" "$MACOS_DIR/TypeNo"
 cp "$ROOT_DIR/App/Info.plist" "$CONTENTS_DIR/Info.plist"
 
+if [ -f "$ROOT_DIR/App/TypeNo.icns" ]; then
+    cp "$ROOT_DIR/App/TypeNo.icns" "$RESOURCES_DIR/TypeNo.icns"
+fi
+
 chmod +x "$MACOS_DIR/TypeNo"
+
+if command -v codesign >/dev/null 2>&1; then
+    codesign --force --sign - --timestamp=none "$APP_DIR"
+fi
 
 echo "Built $APP_DIR"
