@@ -8,8 +8,6 @@
 	<string>TypeNo</string>
 	<key>CFBundleIdentifier</key>
 	<string>ai.marswave.typeno</string>
-	<key>CFBundleIconFile</key>
-	<string>TypeNo</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
