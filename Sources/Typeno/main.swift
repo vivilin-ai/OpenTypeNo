@@ -877,6 +877,14 @@ final class ColiASRService: @unchecked Sendable {
             }
         }
 
+        // Use npm to find global bin directory (works even when coli is in a custom prefix)
+        if let npmGlobalBin = resolveNpmGlobalBin(), !npmGlobalBin.isEmpty {
+            let coliViaNpm = npmGlobalBin + "/coli"
+            if FileManager.default.isExecutableFile(atPath: coliViaNpm) {
+                return coliViaNpm
+            }
+        }
+
         // GUI apps don't inherit terminal PATH, so spawn a login shell to resolve coli
         return resolveViaShell("coli")
     }
@@ -916,9 +924,10 @@ final class ColiASRService: @unchecked Sendable {
 
     private static func resolveViaShell(_ command: String) -> String? {
         let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+        // Use -i (interactive) so nvm/fnm/volta init scripts in .zshrc are loaded
         let process = Process()
         process.executableURL = URL(fileURLWithPath: shell)
-        process.arguments = ["-l", "-c", "command -v \(command)"]
+        process.arguments = ["-l", "-i", "-c", "command -v \(command)"]
 
         let pipe = Pipe()
         process.standardOutput = pipe
@@ -938,6 +947,39 @@ final class ColiASRService: @unchecked Sendable {
                 return nil
             }
             return path
+        } catch {
+            return nil
+        }
+    }
+
+    /// Resolve the npm global bin directory by asking npm itself via a login shell.
+    private static func resolveNpmGlobalBin() -> String? {
+        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: shell)
+        process.arguments = ["-l", "-i", "-c", "npm bin -g 2>/dev/null || npm prefix -g 2>/dev/null"]
+
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+
+            guard process.terminationStatus == 0 else { return nil }
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            let output = String(data: data, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+            // npm bin -g returns the bin path directly
+            // npm prefix -g returns the prefix, bin is prefix/bin
+            if output.hasSuffix("/bin") {
+                return output
+            } else if !output.isEmpty {
+                return output + "/bin"
+            }
+            return nil
         } catch {
             return nil
         }
