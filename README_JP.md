@@ -14,17 +14,17 @@
 
 ## 使い方
 
-1. **Control を短く押す** と録音開始
+1. **Control を短く押す**（デフォルト。カスタマイズ可能）と録音開始
 2. **もう一度 Control を短く押す** と停止
 3. テキストが自動的に文字起こしされ、アクティブなアプリにペーストされます（クリップボードにもコピー）
 
-それだけです。ウィンドウなし、設定なし、アカウント不要。
+OpenTypeNo は邪魔にならず、主にバックグラウンドで動作します。
 
 ## インストール
 
 ### 方法 1：アプリをダウンロード
 
-- [TypeNo for macOS をダウンロード](https://github.com/marswaveai/TypeNo/releases/latest)
+- [TypeNo for macOS をダウンロード](https://github.com/vivilin-ai/OpenTypeNo/releases/latest)
 - 最新の `TypeNo.app.zip` をダウンロード
 - 解凍して `TypeNo.app` を `/Applications` に移動
 - TypeNo を起動
@@ -52,31 +52,39 @@ TypeNo には一度だけ次の2つの権限が必要です：
 ### 方法 2：ソースからビルド
 
 ```bash
-git clone https://github.com/marswaveai/TypeNo.git
-cd TypeNo
+git clone https://github.com/vivilin-ai/OpenTypeNo.git
+cd OpenTypeNo
 scripts/generate_icon.sh
 scripts/build_app.sh
 ```
 
 アプリは `dist/TypeNo.app` に生成されます。権限を維持するため `/Applications/` に移動してください。
 
-## 操作方法
+## 操作方法・機能
 
 | 操作 | トリガー |
 |---|---|
-| 録音の開始/停止 | `Control` を短く押す（300ms以内、他のキーなし） |
+| 録音の開始/停止 | `Control` を短く押す（カスタマイズ可能: ⌃, ⌥, ⌘, ⇧） |
+| トリガーモード | シングルタップまたはダブルタップ |
 | 録音の開始/停止 | メニューバー → Record |
 | ファイルの文字起こし | `.m4a`/`.mp3`/`.wav`/`.aac` をメニューバーアイコンにドラッグ |
+| 設定を開く | メニューバー → Settings...（`,`） |
 | アップデート確認 | メニューバー → Check for Updates... |
 | 終了 | メニューバー → Quit（`⌘Q`） |
 
+### 詳細設定
+
+メニューバーから設定ウィンドウを開くと、以下のカスタマイズが可能です：
+- **文字起こしモード**: ローカルでプライバシー優先の文字起こし（`coli`）、またはより高精度な**クラウド ASR**（OpenAI Whisper、要 API Key）から選択できます。
+- **後処理**: LLM (DeepSeek / Kimi 対応、要 API Key) を利用し、自動的な句読点の追加・フィラーワードの削除・誤字の修正を行います。
+
 ## 設計思想
 
-TypeNo がやることはひとつだけ：音声 → テキスト → ペースト。余計な UI なし、設定なし、構成不要。最速のタイピングは、タイピングしないこと。
+TypeNo がフォーカスするのは：音声 → テキスト → ペースト の一点です。余計な UI を最小限に抑えています。最速のタイピングは、タイピングしないこと。
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=marswaveai/TypeNo&type=Date)](https://star-history.com/#marswaveai/TypeNo&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=vivilin-ai/OpenTypeNo&type=Date)](https://star-history.com/#vivilin-ai/OpenTypeNo&Date)
 
 ## ライセンス
 

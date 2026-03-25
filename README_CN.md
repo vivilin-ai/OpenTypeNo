@@ -14,17 +14,17 @@
 
 ## 使用方式
 
-1. **短按 Control** 开始录音
+1. **短按 Control**（默认快捷键，可自定义）开始录音
 2. **再短按 Control** 停止
 3. 文字自动转录并粘贴到当前应用（同时复制到剪贴板）
 
-就这么简单。没有窗口，没有设置，没有账号。
+OpenTypeNo 尽量保持在后台运行，不打扰你的工作流。
 
 ## 安装
 
 ### 方式一：直接下载
 
-- [下载 TypeNo for macOS](https://github.com/marswaveai/TypeNo/releases/latest)
+- [下载 TypeNo for macOS](https://github.com/vivilin-ai/OpenTypeNo/releases/latest)
 - 下载最新的 `TypeNo.app.zip`
 - 解压后将 `TypeNo.app` 拖到 `/Applications`
 - 打开 TypeNo
@@ -52,31 +52,39 @@ TypeNo 需要两个一次性授权：
 ### 方式二：从源码构建
 
 ```bash
-git clone https://github.com/marswaveai/TypeNo.git
-cd TypeNo
+git clone https://github.com/vivilin-ai/OpenTypeNo.git
+cd OpenTypeNo
 scripts/generate_icon.sh
 scripts/build_app.sh
 ```
 
 应用位于 `dist/TypeNo.app`。移动到 `/Applications/` 以获得持久权限。
 
-## 操作方式
+## 操作方式 & 功能
 
 | 操作 | 触发方式 |
 |---|---|
-| 开始/停止录音 | 短按 `Control`（< 300ms，不按其他键） |
+| 开始/停止录音 | 短按 `Control`（可自定义：⌃, ⌥, ⌘, ⇧） |
+| 触发模式 | 可选择单击（Single Tap）或双击（Double Tap） |
 | 开始/停止录音 | 菜单栏 → Record |
 | 转录文件 | 拖拽 `.m4a`/`.mp3`/`.wav`/`.aac` 到菜单栏图标 |
+| 打开设置 | 菜单栏 → Settings...（`,`） |
 | 检查更新 | 菜单栏 → Check for Updates... |
 | 退出 | 菜单栏 → Quit（`⌘Q`） |
 
+### 高级设置
+
+在菜单栏中打开设置窗口，你可以配置：
+- **转录模式**：选择本地优先保护隐私的转录（`coli`）或准确率更高的**云端 ASR**（OpenAI Whisper，需要 API Key）。
+- **后处理功能**：使用大语言模型（支持 DeepSeek 和 Kimi，需要 API Key）自动添加标点符号、删除语助词并纠正明显的错别字。
+
 ## 设计理念
 
-TypeNo 只做一件事：语音 → 文字 → 粘贴。没有多余的 UI，没有偏好设置，没有配置项。最快的打字方式就是不打字。
+TypeNo 专注于核心流程：语音 → 文字 → 粘贴。我们将多余的 UI 降至最低，最快的打字方式就是不打字。
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=marswaveai/TypeNo&type=Date)](https://star-history.com/#marswaveai/TypeNo&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=vivilin-ai/OpenTypeNo&type=Date)](https://star-history.com/#vivilin-ai/OpenTypeNo&Date)
 
 ## 许可证
 

@@ -3,12 +3,12 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_DIR="$ROOT_DIR/.build/release"
-APP_DIR="$ROOT_DIR/dist/TypeNo.app"
+APP_DIR="$ROOT_DIR/dist/OpenTypeNo.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
-ENTITLEMENTS="$ROOT_DIR/App/TypeNo.entitlements"
-ZIP_PATH="$ROOT_DIR/dist/TypeNo.app.zip"
+ENTITLEMENTS="$ROOT_DIR/App/OpenTypeNo.entitlements"
+ZIP_PATH="$ROOT_DIR/dist/OpenTypeNo.app.zip"
 
 find_codesign_identity() {
     if [ -n "${CODE_SIGN_IDENTITY:-}" ]; then
@@ -33,20 +33,20 @@ find_codesign_identity() {
 
 mkdir -p "$ROOT_DIR/dist"
 
-echo "==> Building TypeNo..."
+echo "==> Building OpenTypeNo..."
 swift build -c release --package-path "$ROOT_DIR"
 
 rm -rf "$APP_DIR"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 
-cp "$BUILD_DIR/TypeNo" "$MACOS_DIR/TypeNo"
+cp "$BUILD_DIR/OpenTypeNo" "$MACOS_DIR/OpenTypeNo"
 cp "$ROOT_DIR/App/Info.plist" "$CONTENTS_DIR/Info.plist"
 
-if [ -f "$ROOT_DIR/App/TypeNo.icns" ]; then
-    cp "$ROOT_DIR/App/TypeNo.icns" "$RESOURCES_DIR/TypeNo.icns"
+if [ -f "$ROOT_DIR/App/OpenTypeNo.icns" ]; then
+    cp "$ROOT_DIR/App/OpenTypeNo.icns" "$RESOURCES_DIR/OpenTypeNo.icns"
 fi
 
-chmod +x "$MACOS_DIR/TypeNo"
+chmod +x "$MACOS_DIR/OpenTypeNo"
 
 # --- Code Signing ---
 CODE_SIGN_NAME="$(find_codesign_identity)"

@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# Generate a simple TypeNo icon using SF Symbols
+# Generate a simple OpenTypeNo icon using SF Symbols
 # Create a temporary Swift script to generate the icon
 
 cat > /tmp/generate_typeno_icon.swift << 'EOF'

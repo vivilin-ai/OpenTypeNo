@@ -83,8 +83,8 @@ enum TriggerMode: String, Codable, CaseIterable {
 }
 
 extension UserDefaults {
-    private static let modifierKey   = "ai.marswave.typeno.hotkeyModifier"
-    private static let triggerKey    = "ai.marswave.typeno.triggerMode"
+    private static let modifierKey   = "ai.marswave.opentypeno.hotkeyModifier"
+    private static let triggerKey    = "ai.marswave.opentypeno.triggerMode"
 
     var hotkeyModifier: HotkeyModifier {
         get {
@@ -112,7 +112,7 @@ extension Array {
 }
 
 extension Notification.Name {
-    static let hotkeyConfigChanged = Notification.Name("ai.marswave.typeno.hotkeyConfigChanged")
+    static let hotkeyConfigChanged = Notification.Name("ai.marswave.opentypeno.hotkeyConfigChanged")
 }
 
 
@@ -122,6 +122,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItemController: StatusItemController?
     private var hotkeyMonitor: HotkeyMonitor?
     private var overlayController: OverlayPanelController?
+    private var settingsController: SettingsWindowController?
     private var permissionsGranted = false
     private var pollTimer: Timer?
     private let updateService = UpdateService()
@@ -131,6 +132,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         overlayController = OverlayPanelController(appState: appState)
         statusItemController = StatusItemController(appState: appState)
+        settingsController = SettingsWindowController()
         hotkeyMonitor = HotkeyMonitor(
             modifier: UserDefaults.standard.hotkeyModifier,
             triggerMode: UserDefaults.standard.triggerMode,
@@ -141,6 +143,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self,
             selector: #selector(restartHotkeyMonitor),
             name: .hotkeyConfigChanged,
+            object: nil
+        )
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleOpenSettings),
+            name: .openSettings,
             object: nil
         )
 
@@ -223,7 +232,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             stopRecording()
         case .done:
             appState.confirmInsert()
-        case .transcribing, .error:
+        case .transcribing, .postProcessing, .error:
             appState.cancel()
         case .permissions, .missingColi, .installingColi, .updating:
             break
@@ -238,6 +247,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onToggle: { [weak self] in self?.handleToggle() }
         )
         hotkeyMonitor?.start()
+    }
+
+    @objc private func handleOpenSettings() {
+        settingsController?.show()
     }
 
     private func startRecording() {
@@ -346,6 +359,7 @@ enum AppPhase: Equatable {
     case idle
     case recording
     case transcribing(String = "Transcribing...")
+    case postProcessing
     case done(String)        // transcription result, waiting for user confirm
     case permissions(Set<PermissionKind>)
     case missingColi
@@ -359,6 +373,7 @@ enum AppPhase: Equatable {
         case .recording: L("Listening...", "录音中...")
         case .transcribing(let message):
             message == "Transcribing..." ? L("Transcribing...", "转录中...") : message
+        case .postProcessing: L("Optimizing...", "优化中...")
         case .done(let text): text
         case .permissions, .missingColi, .installingColi: ""
         case .updating(let message): message
@@ -383,7 +398,8 @@ final class AppState: ObservableObject {
     var onUpdateRequest: (() -> Void)?
 
     private let recorder = AudioRecorder()
-    private let asrService = ColiASRService()
+    private var asrService: any ASRServiceProtocol = ColiASRService()
+    private let postProcessor = PostProcessingService()
     private var currentRecordingURL: URL?
     private var previousApp: NSRunningApplication?
     private var recordingTimer: Timer?
@@ -421,7 +437,7 @@ final class AppState: ObservableObject {
         recordingTimer?.invalidate()
         recordingTimer = nil
         recorder.cancel()
-        asrService.cancelCurrentProcess()
+        (asrService as? ColiASRService)?.cancelCurrentProcess()
         if let currentRecordingURL {
             try? FileManager.default.removeItem(at: currentRecordingURL)
         }
@@ -494,19 +510,30 @@ final class AppState: ObservableObject {
 
         phase = .transcribing()
 
-        do {
-            let text = try await asrService.transcribe(fileURL: url)
-            transcript = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Select ASR service based on user setting
+        let service: any ASRServiceProtocol = UserDefaults.standard.asrMode == .cloud
+            ? CloudASRService()
+            : ColiASRService()
 
-            guard transcript.isEmpty == false else {
-                throw TypeNoError.emptyTranscript
+        do {
+            var text = try await service.transcribe(fileURL: url)
+            text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            guard !text.isEmpty else {
+                throw OpenTypeNoError.emptyTranscript
             }
 
-            // Show result briefly, then auto-insert
+            // Post-processing if enabled
+            if UserDefaults.standard.postProcessingEnabled {
+                phase = .postProcessing
+                text = (try? await postProcessor.process(text)) ?? text
+            }
+
+            transcript = text
             phase = .done(transcript)
             onOverlayRequest?(true)
             confirmInsert()
-        } catch TypeNoError.coliNotInstalled {
+        } catch OpenTypeNoError.coliNotInstalled {
             showMissingColi()
         } catch {
             showError(error.localizedDescription)
@@ -563,22 +590,31 @@ final class AppState: ObservableObject {
         phase = .transcribing()
         onOverlayRequest?(true)
 
-        do {
-            let text = try await asrService.transcribe(fileURL: url)
-            transcript = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let service: any ASRServiceProtocol = UserDefaults.standard.asrMode == .cloud
+            ? CloudASRService()
+            : ColiASRService()
 
-            guard transcript.isEmpty == false else {
-                throw TypeNoError.emptyTranscript
+        do {
+            var text = try await service.transcribe(fileURL: url)
+            text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            guard !text.isEmpty else {
+                throw OpenTypeNoError.emptyTranscript
             }
 
+            if UserDefaults.standard.postProcessingEnabled {
+                phase = .postProcessing
+                text = (try? await postProcessor.process(text)) ?? text
+            }
+
+            transcript = text
             phase = .done(transcript)
             onOverlayRequest?(true)
-            // Copy to clipboard (don't paste into another app)
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(transcript, forType: .string)
             try? await Task.sleep(for: .seconds(2))
             cancel()
-        } catch TypeNoError.coliNotInstalled {
+        } catch OpenTypeNoError.coliNotInstalled {
             showMissingColi()
         } catch {
             showError(error.localizedDescription)
@@ -588,7 +624,7 @@ final class AppState: ObservableObject {
 
 // MARK: - Errors
 
-enum TypeNoError: LocalizedError {
+enum OpenTypeNoError: LocalizedError {
     case noRecording
     case emptyTranscript
     case coliNotInstalled
@@ -600,7 +636,7 @@ enum TypeNoError: LocalizedError {
         switch self {
         case .noRecording: "No recording"
         case .emptyTranscript: "No speech detected"
-        case .coliNotInstalled: "TypeNo needs the local Coli engine. Install it with: npm install -g @marswave/coli"
+        case .coliNotInstalled: "OpenTypeNo needs the local Coli engine. Install it with: npm install -g @marswave/coli"
         case .npmNotFound: "Node.js is required. Install it from https://nodejs.org"
         case .coliInstallFailed(let message): "Coli install failed: \(message)"
         case .transcriptionFailed(let message): message
@@ -671,7 +707,7 @@ final class AudioRecorder: NSObject, AVAudioRecorderDelegate {
     private var stopContinuation: CheckedContinuation<URL, Error>?
 
     func start() throws -> URL {
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("TypeNo", isDirectory: true)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("OpenTypeNo", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
         let url = directory.appendingPathComponent(UUID().uuidString).appendingPathExtension("m4a")
@@ -693,7 +729,7 @@ final class AudioRecorder: NSObject, AVAudioRecorderDelegate {
 
     func stop() async throws -> URL {
         guard let recordingURL else {
-            throw TypeNoError.noRecording
+            throw OpenTypeNoError.noRecording
         }
         guard let recorder else {
             return recordingURL
@@ -721,7 +757,7 @@ final class AudioRecorder: NSObject, AVAudioRecorderDelegate {
             if flag, let recordingURL {
                 finishStop(with: .success(recordingURL))
             } else {
-                finishStop(with: .failure(TypeNoError.noRecording))
+                finishStop(with: .failure(OpenTypeNoError.noRecording))
             }
             recordingURL = nil
         }
@@ -729,7 +765,7 @@ final class AudioRecorder: NSObject, AVAudioRecorderDelegate {
 
     nonisolated func audioRecorderEncodeErrorDidOccur(_ recorder: AVAudioRecorder, error: (any Error)?) {
         Task { @MainActor in
-            finishStop(with: .failure(error ?? TypeNoError.noRecording))
+            finishStop(with: .failure(error ?? OpenTypeNoError.noRecording))
             recordingURL = nil
         }
     }
@@ -766,7 +802,7 @@ final class ColiASRService: @unchecked Sendable {
     /// Auto-install coli via npm. Reports progress via callback.
     static func installColi(onProgress: @MainActor @Sendable @escaping (String) -> Void) async throws {
         guard let npmPath = findNpmPath() else {
-            throw TypeNoError.npmNotFound
+            throw OpenTypeNoError.npmNotFound
         }
 
         await onProgress("Installing coli...")
@@ -825,7 +861,7 @@ final class ColiASRService: @unchecked Sendable {
                     guard process.terminationStatus == 0 else {
                         let errorOutput = String(data: stderrBuf.read(), encoding: .utf8) ?? ""
                         let msg = errorOutput.trimmingCharacters(in: .whitespacesAndNewlines)
-                        throw TypeNoError.coliInstallFailed(msg.isEmpty ? "npm install failed" : msg)
+                        throw OpenTypeNoError.coliInstallFailed(msg.isEmpty ? "npm install failed" : msg)
                     }
 
                     continuation.resume()
@@ -851,7 +887,7 @@ final class ColiASRService: @unchecked Sendable {
 
     func transcribe(fileURL: URL) async throws -> String {
         guard let coliPath = Self.findColiPath() else {
-            throw TypeNoError.coliNotInstalled
+            throw OpenTypeNoError.coliNotInstalled
         }
 
         return try await withCheckedThrowingContinuation { continuation in
@@ -941,7 +977,7 @@ final class ColiASRService: @unchecked Sendable {
                     self?.processLock.unlock()
 
                     guard process.terminationReason != .uncaughtSignal else {
-                        throw TypeNoError.transcriptionFailed("Transcription timed out")
+                        throw OpenTypeNoError.transcriptionFailed("Transcription timed out")
                     }
 
                     let output = String(data: stdoutBuf.read(), encoding: .utf8) ?? ""
@@ -949,7 +985,7 @@ final class ColiASRService: @unchecked Sendable {
 
                     guard process.terminationStatus == 0 else {
                         let msg = errorOutput.trimmingCharacters(in: .whitespacesAndNewlines)
-                        throw TypeNoError.transcriptionFailed(msg.isEmpty ? "coli failed" : msg)
+                        throw OpenTypeNoError.transcriptionFailed(msg.isEmpty ? "coli failed" : msg)
                     }
 
                     continuation.resume(returning: output.trimmingCharacters(in: .whitespacesAndNewlines))
@@ -1270,7 +1306,7 @@ final class StatusItemController: NSObject {
         let menu = NSMenu()
 
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
-        let aboutItem = NSMenuItem(title: "TypeNo  v\(version)", action: nil, keyEquivalent: "")
+        let aboutItem = NSMenuItem(title: "OpenTypeNo  v\(version)", action: nil, keyEquivalent: "")
         aboutItem.isEnabled = false
         menu.addItem(aboutItem)
 
@@ -1317,6 +1353,10 @@ final class StatusItemController: NSObject {
 
         menu.addItem(NSMenuItem.separator())
 
+        let settingsItem = NSMenuItem(title: L("Settings...", "设置..."), action: #selector(openSettings), keyEquivalent: ",")
+        settingsItem.target = self
+        menu.addItem(settingsItem)
+
         let updateItem = NSMenuItem(title: L("Check for Updates...", "检查更新..."), action: #selector(checkForUpdates), keyEquivalent: "")
         updateItem.target = self
         updateItem.tag = 200
@@ -1324,7 +1364,7 @@ final class StatusItemController: NSObject {
 
         menu.addItem(NSMenuItem(title: L("Open Privacy Settings", "打开隐私设置"), action: #selector(openPrivacySettings), keyEquivalent: ""))
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: L("Quit TypeNo", "退出 TypeNo"), action: #selector(quit), keyEquivalent: "q"))
+        menu.addItem(NSMenuItem(title: L("Quit OpenTypeNo", "退出 OpenTypeNo"), action: #selector(quit), keyEquivalent: "q"))
 
         menu.items.forEach { $0.target = self }
         statusItem.menu = menu
@@ -1401,6 +1441,10 @@ final class StatusItemController: NSObject {
         UserDefaults.standard.triggerMode = mode
         sender.menu?.items.forEach { $0.state = $0.tag == sender.tag ? .on : .off }
         NotificationCenter.default.post(name: .hotkeyConfigChanged, object: nil)
+    }
+
+    @objc private func openSettings() {
+        NotificationCenter.default.post(name: .openSettings, object: nil)
     }
 
     @objc private func openPrivacySettings() {
@@ -1573,6 +1617,11 @@ struct OverlayView: View {
                     .controlSize(.small)
             }
 
+            if case .postProcessing = appState.phase {
+                ProgressView()
+                    .controlSize(.small)
+            }
+
             if case .updating = appState.phase {
                 ProgressView()
                     .controlSize(.small)
@@ -1674,7 +1723,7 @@ struct OverlayView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(L("Node.js Required", "需要 Node.js"))
                         .font(.system(size: 13, weight: .medium))
-                    Text(L("Install Node.js first, then TypeNo will set up automatically.", "请先安装 Node.js，TypeNo 将自动配置。"))
+                    Text(L("Install Node.js first, then OpenTypeNo will set up automatically.", "请先安装 Node.js，OpenTypeNo 将自动配置。"))
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                 }
@@ -1753,9 +1802,9 @@ struct OverlayView: View {
 // MARK: - Update Service
 
 final class UpdateService: @unchecked Sendable {
-    static let repoOwner = "marswaveai"
-    static let repoName = "TypeNo"
-    static let assetName = "TypeNo.app.zip"
+    static let repoOwner = "vivilin-ai"
+    static let repoName = "OpenTypeNo"
+    static let assetName = "OpenTypeNo.app.zip"
 
     struct ReleaseInfo {
         let version: String
@@ -1784,7 +1833,7 @@ final class UpdateService: @unchecked Sendable {
         do {
             var request = URLRequest(url: url)
             request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-            request.setValue("TypeNo/\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0")", forHTTPHeaderField: "User-Agent")
+            request.setValue("OpenTypeNo/\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0")", forHTTPHeaderField: "User-Agent")
             let (data, _) = try await URLSession.shared.data(for: request)
             guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
                 return .failed
@@ -1824,7 +1873,7 @@ final class UpdateService: @unchecked Sendable {
 
         // Download zip to temp
         let (zipURL, _) = try await URLSession.shared.download(from: downloadURL)
-        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("TypeNo-update-\(UUID().uuidString)")
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("OpenTypeNo-update-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
 
         let zipDest = tempDir.appendingPathComponent(Self.assetName)
@@ -1850,7 +1899,7 @@ final class UpdateService: @unchecked Sendable {
             throw UpdateError.unzipFailed
         }
 
-        let newAppURL = tempDir.appendingPathComponent("TypeNo.app")
+        let newAppURL = tempDir.appendingPathComponent("OpenTypeNo.app")
         guard FileManager.default.fileExists(atPath: newAppURL.path) else {
             throw UpdateError.appNotFound
         }
@@ -1867,7 +1916,7 @@ final class UpdateService: @unchecked Sendable {
         // Replace current app
         let currentAppURL = Bundle.main.bundleURL
         let appParent = currentAppURL.deletingLastPathComponent()
-        let backupURL = appParent.appendingPathComponent("TypeNo.app.bak")
+        let backupURL = appParent.appendingPathComponent("OpenTypeNo.app.bak")
 
         // Remove old backup if exists
         if FileManager.default.fileExists(atPath: backupURL.path) {
@@ -1940,6 +1989,281 @@ enum UpdateError: LocalizedError {
         case .appNotFound: "Update package is invalid"
         case .replaceFailed: "Failed to replace app"
         }
+    }
+}
+
+// MARK: - Settings
+
+enum ASRMode: String, Codable, CaseIterable {
+    case local = "Local"
+    case cloud = "Cloud"
+
+    var label: String {
+        switch self {
+        case .local: L("Local (coli)", "本地 (coli)")
+        case .cloud: L("Cloud (OpenAI Whisper)", "云端 (OpenAI Whisper)")
+        }
+    }
+}
+
+enum LLMProvider: String, Codable, CaseIterable {
+    case deepseek = "DeepSeek"
+    case kimi     = "Kimi"
+
+    var label: String { rawValue }
+
+    var baseURL: String {
+        switch self {
+        case .deepseek: "https://api.deepseek.com/v1/chat/completions"
+        case .kimi:     "https://api.moonshot.cn/v1/chat/completions"
+        }
+    }
+
+    var model: String {
+        switch self {
+        case .deepseek: "deepseek-chat"
+        case .kimi:     "moonshot-v1-8k"
+        }
+    }
+}
+
+extension UserDefaults {
+    private static let asrModeKey               = "ai.marswave.opentypeno.asrMode"
+    private static let openAIAPIKeyKey          = "ai.marswave.opentypeno.openAIAPIKey"
+    private static let postProcessingEnabledKey = "ai.marswave.opentypeno.postProcessingEnabled"
+    private static let llmProviderKey           = "ai.marswave.opentypeno.llmProvider"
+    private static let llmAPIKeyKey             = "ai.marswave.opentypeno.llmAPIKey"
+
+    var asrMode: ASRMode {
+        get {
+            guard let raw = string(forKey: Self.asrModeKey),
+                  let v = ASRMode(rawValue: raw) else { return .local }
+            return v
+        }
+        set { set(newValue.rawValue, forKey: Self.asrModeKey) }
+    }
+
+    var openAIAPIKey: String {
+        get { string(forKey: Self.openAIAPIKeyKey) ?? "" }
+        set { set(newValue, forKey: Self.openAIAPIKeyKey) }
+    }
+
+    var postProcessingEnabled: Bool {
+        get { bool(forKey: Self.postProcessingEnabledKey) }
+        set { set(newValue, forKey: Self.postProcessingEnabledKey) }
+    }
+
+    var llmProvider: LLMProvider {
+        get {
+            guard let raw = string(forKey: Self.llmProviderKey),
+                  let v = LLMProvider(rawValue: raw) else { return .deepseek }
+            return v
+        }
+        set { set(newValue.rawValue, forKey: Self.llmProviderKey) }
+    }
+
+    var llmAPIKey: String {
+        get { string(forKey: Self.llmAPIKeyKey) ?? "" }
+        set { set(newValue, forKey: Self.llmAPIKeyKey) }
+    }
+}
+
+// MARK: - ASR Protocol
+
+protocol ASRServiceProtocol: Sendable {
+    func transcribe(fileURL: URL) async throws -> String
+}
+
+extension ColiASRService: ASRServiceProtocol {}
+
+// MARK: - Cloud ASR Service (OpenAI Whisper)
+
+final class CloudASRService: ASRServiceProtocol, @unchecked Sendable {
+    func transcribe(fileURL: URL) async throws -> String {
+        let apiKey = UserDefaults.standard.openAIAPIKey
+        guard !apiKey.isEmpty else {
+            throw OpenTypeNoError.transcriptionFailed(L(
+                "OpenAI API Key not set. Please configure it in Settings.",
+                "未设置 OpenAI API Key，请在设置中填写。"
+            ))
+        }
+
+        guard let url = URL(string: "https://api.openai.com/v1/audio/transcriptions") else {
+            throw OpenTypeNoError.transcriptionFailed("Invalid API URL")
+        }
+
+        let boundary = UUID().uuidString
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+        let audioData = try Data(contentsOf: fileURL)
+        var body = Data()
+
+        func append(_ string: String) {
+            if let data = string.data(using: .utf8) { body.append(data) }
+        }
+
+        append("--\(boundary)\r\n")
+        append("Content-Disposition: form-data; name=\"model\"\r\n\r\n")
+        append("whisper-1\r\n")
+
+        append("--\(boundary)\r\n")
+        append("Content-Disposition: form-data; name=\"language\"\r\n\r\n")
+        append("zh\r\n")
+
+        append("--\(boundary)\r\n")
+        append("Content-Disposition: form-data; name=\"file\"; filename=\"audio.m4a\"\r\n")
+        append("Content-Type: audio/m4a\r\n\r\n")
+        body.append(audioData)
+        append("\r\n")
+        append("--\(boundary)--\r\n")
+
+        request.httpBody = body
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode != 200 {
+            let msg = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])
+                .flatMap { ($0["error"] as? [String: Any])?["message"] as? String }
+                ?? "HTTP \(httpResponse.statusCode)"
+            throw OpenTypeNoError.transcriptionFailed(msg)
+        }
+
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let text = json["text"] as? String else {
+            throw OpenTypeNoError.transcriptionFailed(L("Failed to parse transcription response", "解析转录结果失败"))
+        }
+
+        return text
+    }
+}
+
+// MARK: - Post Processing Service
+
+final class PostProcessingService: @unchecked Sendable {
+    func process(_ text: String) async throws -> String {
+        let provider = UserDefaults.standard.llmProvider
+        let apiKey   = UserDefaults.standard.llmAPIKey
+        guard !apiKey.isEmpty else { return text }
+
+        guard let url = URL(string: provider.baseURL) else { return text }
+
+        let prompt = """
+你是一个文字后处理助手。对以下语音转录文本进行：
+1. 添加合适的标点符号
+2. 删除语助词（嗯、啊、那个、就是、然后、这个等）
+3. 纠正明显的错别字
+只返回处理后的文本，不要解释，不要加引号。
+
+原文：\(text)
+"""
+
+        let body: [String: Any] = [
+            "model": provider.model,
+            "messages": [["role": "user", "content": prompt]],
+            "max_tokens": 2048,
+            "temperature": 0.1
+        ]
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard (response as? HTTPURLResponse)?.statusCode == 200,
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let choices = json["choices"] as? [[String: Any]],
+              let message = choices.first?["message"] as? [String: Any],
+              let content = message["content"] as? String else {
+            return text
+        }
+
+        return content.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+// MARK: - Settings Window
+
+extension Notification.Name {
+    static let openSettings = Notification.Name("ai.marswave.opentypeno.openSettings")
+}
+
+@MainActor
+final class SettingsWindowController: NSObject {
+    private var window: NSWindow?
+
+    func show() {
+        if let existing = window, existing.isVisible {
+            existing.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
+        let hosting = NSHostingView(rootView: SettingsView())
+        hosting.frame = NSRect(x: 0, y: 0, width: 420, height: 340)
+
+        let win = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 420, height: 340),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        win.title = L("OpenTypeNo Settings", "OpenTypeNo 设置")
+        win.contentView = hosting
+        win.center()
+        win.isReleasedWhenClosed = false
+        win.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        self.window = win
+    }
+}
+
+struct SettingsView: View {
+    @State private var asrMode: ASRMode         = UserDefaults.standard.asrMode
+    @State private var openAIKey: String        = UserDefaults.standard.openAIAPIKey
+    @State private var postEnabled: Bool        = UserDefaults.standard.postProcessingEnabled
+    @State private var llmProvider: LLMProvider = UserDefaults.standard.llmProvider
+    @State private var llmKey: String           = UserDefaults.standard.llmAPIKey
+
+    var body: some View {
+        Form {
+            Section(L("Transcription", "转录")) {
+                Picker(L("Mode", "模式"), selection: $asrMode) {
+                    ForEach(ASRMode.allCases, id: \.self) { Text($0.label).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .onChange(of: asrMode) { _, new in UserDefaults.standard.asrMode = new }
+
+                if asrMode == .cloud {
+                    SecureField("OpenAI API Key", text: $openAIKey)
+                        .onChange(of: openAIKey) { _, new in UserDefaults.standard.openAIAPIKey = new }
+                }
+            }
+
+            Section(L("Post-Processing", "后处理")) {
+                Toggle(L("Enable (punctuation, cleanup, correction)", "启用（标点、去语助词、纠错）"), isOn: $postEnabled)
+                    .onChange(of: postEnabled) { _, new in UserDefaults.standard.postProcessingEnabled = new }
+
+                if postEnabled {
+                    Picker(L("LLM Provider", "模型"), selection: $llmProvider) {
+                        ForEach(LLMProvider.allCases, id: \.self) { Text($0.label).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .onChange(of: llmProvider) { _, new in UserDefaults.standard.llmProvider = new }
+
+                    SecureField("\(llmProvider.label) API Key", text: $llmKey)
+                        .onChange(of: llmKey) { _, new in UserDefaults.standard.llmAPIKey = new }
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .padding()
+        .frame(width: 420)
     }
 }
 

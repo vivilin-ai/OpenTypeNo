@@ -1,17 +1,17 @@
-// swift-tools-version: 6.2
+// swift-tools-version: 6.1
 import PackageDescription
 
 let package = Package(
-    name: "typeno",
+    name: "opentypeno",
     platforms: [
         .macOS(.v14)
     ],
     products: [
-        .executable(name: "TypeNo", targets: ["TypeNo"])
+        .executable(name: "OpenTypeNo", targets: ["OpenTypeNo"])
     ],
     targets: [
         .executableTarget(
-            name: "TypeNo",
+            name: "OpenTypeNo",
             path: "Sources/Typeno",
             linkerSettings: [
                 .unsafeFlags([
