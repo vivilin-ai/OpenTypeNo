@@ -282,13 +282,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 appState.showError(L("Could not check for updates", "无法检查更新"))
 
             case .updateAvailable(let release):
-                do {
-                    try await updateService.downloadAndInstall(from: release.downloadURL) { message in
-                        self.appState.phase = .updating(message)
-                    }
-                } catch {
-                    appState.showError(L("Update failed", "更新失败") + ": \(error.localizedDescription)")
-                }
+                appState.phase = .updating(L("v\(release.version) available", "v\(release.version) 可更新"))
+                appState.onOverlayRequest?(true)
+                try? await Task.sleep(for: .seconds(1.5))
+                appState.phase = .idle
+                appState.onOverlayRequest?(false)
+                NSWorkspace.shared.open(URL(string: "https://github.com/\(UpdateService.repoOwner)/\(UpdateService.repoName)/releases/latest")!)
             }
         }
     }
