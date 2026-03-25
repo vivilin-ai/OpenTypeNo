@@ -212,7 +212,7 @@ enum PermissionKind: CaseIterable, Hashable {
 enum AppPhase: Equatable {
     case idle
     case recording
-    case transcribing
+    case transcribing(String = "Transcribing...")
     case done(String)        // transcription result, waiting for user confirm
     case permissions(Set<PermissionKind>)
     case missingColi
@@ -224,7 +224,7 @@ enum AppPhase: Equatable {
         switch self {
         case .idle: "Press Fn to start"
         case .recording: "Listening..."
-        case .transcribing: "Transcribing..."
+        case .transcribing(let message): message
         case .done(let text): text
         case .permissions, .missingColi, .installingColi: ""
         case .updating(let message): message
@@ -262,7 +262,7 @@ final class AppState: ObservableObject {
     }
 
     func stopRecording() async throws {
-        phase = .transcribing
+        phase = .transcribing()
         onOverlayRequest?(true)
 
         let url = try await recorder.stop()
@@ -342,10 +342,24 @@ final class AppState: ObservableObject {
             return
         }
 
-        phase = .transcribing
+        phase = .transcribing()
+
+        // Progress timer: show elapsed time and warn near timeout
+        let startTime = Date()
+        let progressTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                let elapsed = Int(Date().timeIntervalSince(startTime))
+                if elapsed >= 100 {
+                    self?.phase = .transcribing("Almost timeout... (\(elapsed)s)")
+                } else if elapsed >= 10 {
+                    self?.phase = .transcribing("Transcribing... \(elapsed)s")
+                }
+            }
+        }
 
         do {
             let text = try await asrService.transcribe(fileURL: url)
+            progressTimer.invalidate()
             transcript = text.trimmingCharacters(in: .whitespacesAndNewlines)
 
             guard transcript.isEmpty == false else {
@@ -357,8 +371,10 @@ final class AppState: ObservableObject {
             onOverlayRequest?(true)
             confirmInsert()
         } catch TypeNoError.coliNotInstalled {
+            progressTimer.invalidate()
             showMissingColi()
         } catch {
+            progressTimer.invalidate()
             showError(error.localizedDescription)
         }
     }
@@ -410,11 +426,24 @@ final class AppState: ObservableObject {
 
     func transcribeFile(_ url: URL) async {
         previousApp = NSWorkspace.shared.frontmostApplication
-        phase = .transcribing
+        phase = .transcribing()
         onOverlayRequest?(true)
+
+        let startTime = Date()
+        let progressTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                let elapsed = Int(Date().timeIntervalSince(startTime))
+                if elapsed >= 100 {
+                    self?.phase = .transcribing("Almost timeout... (\(elapsed)s)")
+                } else if elapsed >= 10 {
+                    self?.phase = .transcribing("Transcribing... \(elapsed)s")
+                }
+            }
+        }
 
         do {
             let text = try await asrService.transcribe(fileURL: url)
+            progressTimer.invalidate()
             transcript = text.trimmingCharacters(in: .whitespacesAndNewlines)
 
             guard transcript.isEmpty == false else {
@@ -425,8 +454,10 @@ final class AppState: ObservableObject {
             onOverlayRequest?(true)
             confirmInsert()
         } catch TypeNoError.coliNotInstalled {
+            progressTimer.invalidate()
             showMissingColi()
         } catch {
+            progressTimer.invalidate()
             showError(error.localizedDescription)
         }
     }
@@ -592,6 +623,14 @@ final class AudioRecorder: NSObject, AVAudioRecorderDelegate {
 
 // MARK: - ASR Service
 
+/// Thread-safe mutable data buffer for pipe reading.
+private final class LockedData: @unchecked Sendable {
+    private var data = Data()
+    private let lock = NSLock()
+    func append(_ chunk: Data) { lock.lock(); data.append(chunk); lock.unlock() }
+    func read() -> Data { lock.lock(); defer { lock.unlock() }; return data }
+}
+
 final class ColiASRService: @unchecked Sendable {
     static var isInstalled: Bool {
         findColiPath() != nil
@@ -638,6 +677,15 @@ final class ColiASRService: @unchecked Sendable {
                     process.standardOutput = stdout
                     process.standardError = stderr
 
+                    // Read pipe data asynchronously to avoid deadlock
+                    let stderrBuf = LockedData()
+                    let stderrHandle = stderr.fileHandleForReading
+
+                    stderrHandle.readabilityHandler = { handle in
+                        let data = handle.availableData
+                        if !data.isEmpty { stderrBuf.append(data) }
+                    }
+
                     try process.run()
 
                     // 120-second timeout for install
@@ -649,8 +697,10 @@ final class ColiASRService: @unchecked Sendable {
                     process.waitUntilExit()
                     timeoutItem.cancel()
 
+                    stderrHandle.readabilityHandler = nil
+
                     guard process.terminationStatus == 0 else {
-                        let errorOutput = String(data: stderr.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+                        let errorOutput = String(data: stderrBuf.read(), encoding: .utf8) ?? ""
                         let msg = errorOutput.trimmingCharacters(in: .whitespacesAndNewlines)
                         throw TypeNoError.coliInstallFailed(msg.isEmpty ? "npm install failed" : msg)
                     }
@@ -708,22 +758,41 @@ final class ColiASRService: @unchecked Sendable {
                     process.standardOutput = stdout
                     process.standardError = stderr
 
+                    // Read pipe data asynchronously to avoid deadlock when buffer fills up
+                    let stdoutBuf = LockedData()
+                    let stderrBuf = LockedData()
+                    let stdoutHandle = stdout.fileHandleForReading
+                    let stderrHandle = stderr.fileHandleForReading
+
+                    stdoutHandle.readabilityHandler = { handle in
+                        let data = handle.availableData
+                        if !data.isEmpty { stdoutBuf.append(data) }
+                    }
+                    stderrHandle.readabilityHandler = { handle in
+                        let data = handle.availableData
+                        if !data.isEmpty { stderrBuf.append(data) }
+                    }
+
                     self?.processLock.lock()
                     self?.currentProcess = process
                     self?.processLock.unlock()
 
                     try process.run()
 
-                    // 30-second timeout
+                    // 120-second timeout (model download on first run can be slow)
                     let timeoutItem = DispatchWorkItem {
                         if process.isRunning {
                             process.terminate()
                         }
                     }
-                    DispatchQueue.global().asyncAfter(deadline: .now() + 30, execute: timeoutItem)
+                    DispatchQueue.global().asyncAfter(deadline: .now() + 120, execute: timeoutItem)
 
                     process.waitUntilExit()
                     timeoutItem.cancel()
+
+                    // Stop reading handlers
+                    stdoutHandle.readabilityHandler = nil
+                    stderrHandle.readabilityHandler = nil
 
                     self?.processLock.lock()
                     self?.currentProcess = nil
@@ -733,8 +802,8 @@ final class ColiASRService: @unchecked Sendable {
                         throw TypeNoError.transcriptionFailed("Transcription timed out")
                     }
 
-                    let output = String(data: stdout.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-                    let errorOutput = String(data: stderr.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+                    let output = String(data: stdoutBuf.read(), encoding: .utf8) ?? ""
+                    let errorOutput = String(data: stderrBuf.read(), encoding: .utf8) ?? ""
 
                     guard process.terminationStatus == 0 else {
                         let msg = errorOutput.trimmingCharacters(in: .whitespacesAndNewlines)
