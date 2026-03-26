@@ -2009,21 +2009,45 @@ enum ASRMode: String, Codable, CaseIterable {
 enum LLMProvider: String, Codable, CaseIterable {
     case deepseek = "DeepSeek"
     case kimi     = "Kimi"
+    case custom   = "Custom"
 
-    var label: String { rawValue }
-
-    var baseURL: String {
+    var label: String {
         switch self {
-        case .deepseek: "https://api.deepseek.com/v1/chat/completions"
-        case .kimi:     "https://api.moonshot.cn/v1/chat/completions"
+        case .custom: L("Custom (OpenAI-compatible)", "自定义 (OpenAI 兼容)")
+        default: rawValue
         }
     }
 
-    var model: String {
+    var defaultBaseURL: String {
+        switch self {
+        case .deepseek: "https://api.deepseek.com/v1/chat/completions"
+        case .kimi:     "https://api.moonshot.cn/v1/chat/completions"
+        case .custom:   ""
+        }
+    }
+
+    var defaultModel: String {
         switch self {
         case .deepseek: "deepseek-chat"
         case .kimi:     "moonshot-v1-8k"
+        case .custom:   "deepseek-chat"
         }
+    }
+
+    var baseURL: String {
+        if self == .custom {
+            let custom = UserDefaults.standard.customLLMBaseURL
+            return custom.isEmpty ? defaultBaseURL : custom
+        }
+        return defaultBaseURL
+    }
+
+    var model: String {
+        if self == .custom {
+            let custom = UserDefaults.standard.customLLMModel
+            return custom.isEmpty ? defaultModel : custom
+        }
+        return defaultModel
     }
 }
 
@@ -2065,6 +2089,19 @@ extension UserDefaults {
     var llmAPIKey: String {
         get { string(forKey: Self.llmAPIKeyKey) ?? "" }
         set { set(newValue, forKey: Self.llmAPIKeyKey) }
+    }
+
+    private static let customLLMBaseURLKey = "ai.marswave.opentypeno.customLLMBaseURL"
+    private static let customLLMModelKey   = "ai.marswave.opentypeno.customLLMModel"
+
+    var customLLMBaseURL: String {
+        get { string(forKey: Self.customLLMBaseURLKey) ?? "" }
+        set { set(newValue, forKey: Self.customLLMBaseURLKey) }
+    }
+
+    var customLLMModel: String {
+        get { string(forKey: Self.customLLMModelKey) ?? "" }
+        set { set(newValue, forKey: Self.customLLMModelKey) }
     }
 }
 
@@ -2144,11 +2181,12 @@ final class CloudASRService: ASRServiceProtocol, @unchecked Sendable {
 
 final class PostProcessingService: @unchecked Sendable {
     func process(_ text: String) async throws -> String {
-        let provider = UserDefaults.standard.llmProvider
         let apiKey   = UserDefaults.standard.llmAPIKey
-        guard !apiKey.isEmpty else { return text }
+        let baseURL  = UserDefaults.standard.customLLMBaseURL
+        let model    = UserDefaults.standard.customLLMModel
+        guard !apiKey.isEmpty, !baseURL.isEmpty else { return text }
 
-        guard let url = URL(string: provider.baseURL) else { return text }
+        guard let url = URL(string: baseURL) else { return text }
 
         let prompt = """
 你是一个文字后处理助手。对以下语音转录文本进行：
@@ -2161,7 +2199,7 @@ final class PostProcessingService: @unchecked Sendable {
 """
 
         let body: [String: Any] = [
-            "model": provider.model,
+            "model": model.isEmpty ? "deepseek-chat" : model,
             "messages": [["role": "user", "content": prompt]],
             "max_tokens": 2048,
             "temperature": 0.1
@@ -2229,6 +2267,8 @@ struct SettingsView: View {
     @State private var postEnabled: Bool        = UserDefaults.standard.postProcessingEnabled
     @State private var llmProvider: LLMProvider = UserDefaults.standard.llmProvider
     @State private var llmKey: String           = UserDefaults.standard.llmAPIKey
+    @State private var customBaseURL: String    = UserDefaults.standard.customLLMBaseURL
+    @State private var customModel: String      = UserDefaults.standard.customLLMModel
 
     var body: some View {
         Form {
@@ -2250,13 +2290,15 @@ struct SettingsView: View {
                     .onChange(of: postEnabled) { _, new in UserDefaults.standard.postProcessingEnabled = new }
 
                 if postEnabled {
-                    Picker(L("LLM Provider", "模型"), selection: $llmProvider) {
-                        ForEach(LLMProvider.allCases, id: \.self) { Text($0.label).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                    .onChange(of: llmProvider) { _, new in UserDefaults.standard.llmProvider = new }
+                    TextField(L("API Base URL", "API 地址"), text: $customBaseURL, prompt: Text("https://api.deepseek.com/v1/chat/completions"))
+                        .onChange(of: customBaseURL) { _, new in UserDefaults.standard.customLLMBaseURL = new }
+                        .textFieldStyle(.roundedBorder)
 
-                    SecureField("\(llmProvider.label) API Key", text: $llmKey)
+                    TextField(L("Model Name", "模型名称"), text: $customModel, prompt: Text("deepseek-chat"))
+                        .onChange(of: customModel) { _, new in UserDefaults.standard.customLLMModel = new }
+                        .textFieldStyle(.roundedBorder)
+
+                    SecureField("API Key", text: $llmKey)
                         .onChange(of: llmKey) { _, new in UserDefaults.standard.llmAPIKey = new }
                 }
             }
