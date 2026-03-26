@@ -77,7 +77,7 @@ The app will be at `dist/OpenTypeNo.app`. Move it to `/Applications/` for persis
 
 Open the Settings window from the menu bar to configure:
 - **Transcription Mode**: Choose between local privacy-first transcription (`coli`) or **Cloud ASR** (OpenAI Whisper) for higher accuracy (requires API Key).
-- **Post-Processing**: Automatically format punctuation, remove filler words (ums, ahs), and correct typos using an LLM (supports DeepSeek and Kimi, requires API Key).
+- **Post-Processing**: Automatically format punctuation, remove filler words (ums, ahs), and correct typos using an LLM. Supports custom API Base URL, model name, and API Key — compatible with any OpenAI-format provider (e.g. DeepSeek, SiliconFlow, OpenRouter, etc.).
 
 ## Design Philosophy
 

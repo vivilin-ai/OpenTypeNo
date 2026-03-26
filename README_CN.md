@@ -76,7 +76,7 @@ scripts/build_app.sh
 
 在菜单栏中打开设置窗口，你可以配置：
 - **转录模式**：选择本地优先保护隐私的转录（`coli`）或准确率更高的**云端 ASR**（OpenAI Whisper，需要 API Key）。
-- **后处理功能**：使用大语言模型（支持 DeepSeek 和 Kimi，需要 API Key）自动添加标点符号、删除语助词并纠正明显的错别字。
+- **后处理功能**：使用大语言模型自动添加标点符号、删除语助词并纠正明显的错别字。支持自定义 API 地址、模型名称和 API Key，兼容任意 OpenAI 格式的 provider（如 DeepSeek、硅基流动、OpenRouter 等）。
 
 ## 设计理念
 

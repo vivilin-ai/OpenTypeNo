@@ -76,7 +76,7 @@ scripts/build_app.sh
 
 メニューバーから設定ウィンドウを開くと、以下のカスタマイズが可能です：
 - **文字起こしモード**: ローカルでプライバシー優先の文字起こし（`coli`）、またはより高精度な**クラウド ASR**（OpenAI Whisper、要 API Key）から選択できます。
-- **後処理**: LLM (DeepSeek / Kimi 対応、要 API Key) を利用し、自動的な句読点の追加・フィラーワードの削除・誤字の修正を行います。
+- **後処理**: LLM を利用し、自動的な句読点の追加・フィラーワードの削除・誤字の修正を行います。カスタム API Base URL・モデル名・API Key を設定でき、OpenAI 互換の任意のプロバイダー（DeepSeek、SiliconFlow、OpenRouter など）に対応しています。
 
 ## 設計思想
 
