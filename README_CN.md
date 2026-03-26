@@ -1,14 +1,14 @@
-# TypeNo
+# OpenTypeNo
 
 [English](README.md) | [日本語](README_JP.md)
 
 **免费、开源、隐私优先的 macOS 语音输入工具。**
 
-![TypeNo 宣传图](assets/hero.webp)
+![OpenTypeNo 宣传图](assets/hero.webp)
 
-一个极简的 macOS 语音输入应用。按下 Control 说话，TypeNo 在本地完成转录，然后自动粘贴到你正在使用的应用中——全程不到一秒。
+一个极简的 macOS 语音输入应用。按下 Control 说话，OpenTypeNo 在本地完成转录，然后自动粘贴到你正在使用的应用中——全程不到一秒。
 
-官方网站：[https://typeno.com](https://typeno.com)
+本项目是对原版 [TypeNo](https://typeno.com) 项目的延续和扩展，在此对其表示特别感谢！
 
 特别感谢 [marswave ai 的 coli 项目](https://github.com/marswaveai/coli) 提供本地语音识别能力。
 
@@ -24,26 +24,26 @@ OpenTypeNo 尽量保持在后台运行，不打扰你的工作流。
 
 ### 方式一：直接下载
 
-- [下载 TypeNo for macOS](https://github.com/vivilin-ai/OpenTypeNo/releases/latest)
-- 下载最新的 `TypeNo.app.zip`
-- 解压后将 `TypeNo.app` 拖到 `/Applications`
-- 打开 TypeNo
+- [下载 OpenTypeNo for macOS](https://github.com/vivilin-ai/OpenTypeNo/releases/latest)
+- 下载最新的 `OpenTypeNo.app.zip`
+- 解压后将 `OpenTypeNo.app` 拖到 `/Applications`
+- 打开 OpenTypeNo
 
-TypeNo 已通过 Apple 签名和公证，可以直接打开使用。
+OpenTypeNo 已通过 Apple 签名和公证，可以直接打开使用。
 
 ### 安装语音识别引擎
 
-TypeNo 使用 [coli](https://github.com/marswaveai/coli) 进行本地语音识别：
+OpenTypeNo 使用 [coli](https://github.com/marswaveai/coli) 进行本地语音识别：
 
 ```bash
 npm install -g @marswave/coli
 ```
 
-如果未安装 Coli，TypeNo 会在应用内弹出引导提示。
+如果未安装 Coli，OpenTypeNo 会在应用内弹出引导提示。
 
 ### 首次启动
 
-TypeNo 需要两个一次性授权：
+OpenTypeNo 需要两个一次性授权：
 - **麦克风** — 录制你的声音
 - **辅助功能** — 将文字粘贴到应用中
 
@@ -58,7 +58,7 @@ scripts/generate_icon.sh
 scripts/build_app.sh
 ```
 
-应用位于 `dist/TypeNo.app`。移动到 `/Applications/` 以获得持久权限。
+应用位于 `dist/OpenTypeNo.app`。移动到 `/Applications/` 以获得持久权限。
 
 ## 操作方式 & 功能
 
@@ -80,7 +80,7 @@ scripts/build_app.sh
 
 ## 设计理念
 
-TypeNo 专注于核心流程：语音 → 文字 → 粘贴。我们将多余的 UI 降至最低，最快的打字方式就是不打字。
+OpenTypeNo 专注于核心流程：语音 → 文字 → 粘贴。我们将多余的 UI 降至最低，最快的打字方式就是不打字。
 
 ## Star History
 

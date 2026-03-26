@@ -1,14 +1,14 @@
-# TypeNo
+# OpenTypeNo
 
 [English](README.md) | [中文](README_CN.md)
 
 **無料・オープンソース・プライバシー優先の macOS 音声入力ツール。**
 
-![TypeNo hero image](assets/hero.webp)
+![OpenTypeNo hero image](assets/hero.webp)
 
-ミニマルな macOS 音声入力アプリ。TypeNo はあなたの声をキャプチャし、ローカルで文字起こしし、使用中のアプリに自動ペーストします — すべて1秒以内。
+ミニマルな macOS 音声入力アプリ。OpenTypeNo はあなたの声をキャプチャし、ローカルで文字起こしし、使用中のアプリに自動ペーストします — すべて1秒以内。
 
-公式サイト: [https://typeno.com](https://typeno.com)
+本プロジェクトはオリジナルの [TypeNo](https://typeno.com) プロジェクトから派生したものです。特別な感謝の意を表します。
 
 ローカル音声認識を支える [marswave ai の coli プロジェクト](https://github.com/marswaveai/coli) に感謝します。
 
@@ -24,16 +24,16 @@ OpenTypeNo は邪魔にならず、主にバックグラウンドで動作しま
 
 ### 方法 1：アプリをダウンロード
 
-- [TypeNo for macOS をダウンロード](https://github.com/vivilin-ai/OpenTypeNo/releases/latest)
-- 最新の `TypeNo.app.zip` をダウンロード
-- 解凍して `TypeNo.app` を `/Applications` に移動
-- TypeNo を起動
+- [OpenTypeNo for macOS をダウンロード](https://github.com/vivilin-ai/OpenTypeNo/releases/latest)
+- 最新の `OpenTypeNo.app.zip` をダウンロード
+- 解凍して `OpenTypeNo.app` を `/Applications` に移動
+- OpenTypeNo を起動
 
-TypeNo は Apple の署名と公証済みです。警告なしでそのまま開けます。
+OpenTypeNo は Apple の署名と公証済みです。警告なしでそのまま開けます。
 
 ### 音声認識エンジンをインストール
 
-TypeNo はローカル音声認識に [coli](https://github.com/marswaveai/coli) を使用します：
+OpenTypeNo はローカル音声認識に [coli](https://github.com/marswaveai/coli) を使用します：
 
 ```bash
 npm install -g @marswave/coli
@@ -43,7 +43,7 @@ npm install -g @marswave/coli
 
 ### 初回起動
 
-TypeNo には一度だけ次の2つの権限が必要です：
+OpenTypeNo には一度だけ次の2つの権限が必要です：
 - **マイク** — 音声を録音するため
 - **アクセシビリティ** — テキストをアプリに貼り付けるため
 
@@ -58,7 +58,7 @@ scripts/generate_icon.sh
 scripts/build_app.sh
 ```
 
-アプリは `dist/TypeNo.app` に生成されます。権限を維持するため `/Applications/` に移動してください。
+アプリは `dist/OpenTypeNo.app` に生成されます。権限を維持するため `/Applications/` に移動してください。
 
 ## 操作方法・機能
 
@@ -80,7 +80,7 @@ scripts/build_app.sh
 
 ## 設計思想
 
-TypeNo がフォーカスするのは：音声 → テキスト → ペースト の一点です。余計な UI を最小限に抑えています。最速のタイピングは、タイピングしないこと。
+OpenTypeNo がフォーカスするのは：音声 → テキスト → ペースト の一点です。余計な UI を最小限に抑えています。最速のタイピングは、タイピングしないこと。
 
 ## Star History
 

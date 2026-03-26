@@ -1,14 +1,14 @@
-# TypeNo
+# OpenTypeNo
 
 [中文](README_CN.md) | [日本語](README_JP.md)
 
 **A free, open source, privacy-first voice input tool for macOS.**
 
-![TypeNo hero image](assets/hero.webp)
+![OpenTypeNo hero image](assets/hero.webp)
 
-A minimal macOS voice input app. TypeNo captures your voice, transcribes it locally, and pastes the result into whatever app you were using — all in under a second.
+A minimal macOS voice input app. OpenTypeNo captures your voice, transcribes it locally, and pastes the result into whatever app you were using — all in under a second.
 
-Official website: [https://typeno.com](https://typeno.com)
+This project is a fork of the original [TypeNo](https://typeno.com) project. We extend our special thanks to them.
 
 Special thanks to [marswave ai's coli project](https://github.com/marswaveai/coli) for powering local speech recognition.
 
@@ -24,27 +24,27 @@ OpenTypeNo stays out of your way and operates mostly in the background, minimizi
 
 ### Option 1 — Download the App
 
-- [Download TypeNo for macOS](https://github.com/vivilin-ai/OpenTypeNo/releases/latest)
-- Download the latest `TypeNo.app.zip`
+- [Download OpenTypeNo for macOS](https://github.com/vivilin-ai/OpenTypeNo/releases/latest)
+- Download the latest `OpenTypeNo.app.zip`
 - Unzip it
-- Move `TypeNo.app` to `/Applications`
-- Open TypeNo
+- Move `OpenTypeNo.app` to `/Applications`
+- Open OpenTypeNo
 
-TypeNo is signed and notarized by Apple — it should open without any warnings.
+OpenTypeNo is signed and notarized by Apple — it should open without any warnings.
 
 ### Install the speech engine
 
-TypeNo uses [coli](https://github.com/marswaveai/coli) for local speech recognition:
+OpenTypeNo uses [coli](https://github.com/marswaveai/coli) for local speech recognition:
 
 ```bash
 npm install -g @marswave/coli
 ```
 
-If Coli is missing, TypeNo will show an in-app setup prompt with the install command.
+If Coli is missing, OpenTypeNo will show an in-app setup prompt with the install command.
 
 ### First Launch
 
-TypeNo needs two one-time permissions:
+OpenTypeNo needs two one-time permissions:
 - **Microphone** — to capture your voice
 - **Accessibility** — to paste text into apps
 
@@ -59,7 +59,7 @@ scripts/generate_icon.sh
 scripts/build_app.sh
 ```
 
-The app will be at `dist/TypeNo.app`. Move it to `/Applications/` for persistent permissions.
+The app will be at `dist/OpenTypeNo.app`. Move it to `/Applications/` for persistent permissions.
 
 ## Usage & Features
 
@@ -81,7 +81,7 @@ Open the Settings window from the menu bar to configure:
 
 ## Design Philosophy
 
-TypeNo focuses on one core loop: voice → text → paste. By reducing UI clutter to the absolute minimum, the fastest way to type is to not type at all.
+OpenTypeNo focuses on one core loop: voice → text → paste. By reducing UI clutter to the absolute minimum, the fastest way to type is to not type at all.
 
 ## Star History
 
