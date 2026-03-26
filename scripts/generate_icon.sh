@@ -4,7 +4,7 @@ set -e
 # Generate a simple OpenTypeNo icon using SF Symbols
 # Create a temporary Swift script to generate the icon
 
-cat > /tmp/generate_typeno_icon.swift << 'EOF'
+cat > /tmp/generate_opentypeno_icon.swift << 'EOF'
 import AppKit
 import CoreGraphics
 
@@ -53,27 +53,27 @@ image.unlockFocus()
 if let tiffData = image.tiffRepresentation,
    let bitmap = NSBitmapImageRep(data: tiffData),
    let pngData = bitmap.representation(using: .png, properties: [:]) {
-    try? pngData.write(to: URL(fileURLWithPath: "/tmp/typeno_icon_1024.png"))
+    try? pngData.write(to: URL(fileURLWithPath: "/tmp/opentypeno_icon_1024.png"))
 }
 EOF
 
-swift /tmp/generate_typeno_icon.swift
+swift /tmp/generate_opentypeno_icon.swift
 
 # Generate iconset
-cd App/TypeNo.iconset
+cd App/OpenTypeNo.iconset
 
-sips -z 16 16 /tmp/typeno_icon_1024.png --out icon_16x16.png
-sips -z 32 32 /tmp/typeno_icon_1024.png --out icon_16x16@2x.png
-sips -z 32 32 /tmp/typeno_icon_1024.png --out icon_32x32.png
-sips -z 64 64 /tmp/typeno_icon_1024.png --out icon_32x32@2x.png
-sips -z 128 128 /tmp/typeno_icon_1024.png --out icon_128x128.png
-sips -z 256 256 /tmp/typeno_icon_1024.png --out icon_128x128@2x.png
-sips -z 256 256 /tmp/typeno_icon_1024.png --out icon_256x256.png
-sips -z 512 512 /tmp/typeno_icon_1024.png --out icon_256x256@2x.png
-sips -z 512 512 /tmp/typeno_icon_1024.png --out icon_512x512.png
-sips -z 1024 1024 /tmp/typeno_icon_1024.png --out icon_512x512@2x.png
+sips -z 16 16 /tmp/opentypeno_icon_1024.png --out icon_16x16.png
+sips -z 32 32 /tmp/opentypeno_icon_1024.png --out icon_16x16@2x.png
+sips -z 32 32 /tmp/opentypeno_icon_1024.png --out icon_32x32.png
+sips -z 64 64 /tmp/opentypeno_icon_1024.png --out icon_32x32@2x.png
+sips -z 128 128 /tmp/opentypeno_icon_1024.png --out icon_128x128.png
+sips -z 256 256 /tmp/opentypeno_icon_1024.png --out icon_128x128@2x.png
+sips -z 256 256 /tmp/opentypeno_icon_1024.png --out icon_256x256.png
+sips -z 512 512 /tmp/opentypeno_icon_1024.png --out icon_256x256@2x.png
+sips -z 512 512 /tmp/opentypeno_icon_1024.png --out icon_512x512.png
+sips -z 1024 1024 /tmp/opentypeno_icon_1024.png --out icon_512x512@2x.png
 
 cd ../..
-iconutil -c icns App/TypeNo.iconset -o App/TypeNo.icns
+iconutil -c icns App/OpenTypeNo.iconset -o App/OpenTypeNo.icns
 
-echo "Icon generated at App/TypeNo.icns"
+echo "Icon generated at App/OpenTypeNo.icns"
