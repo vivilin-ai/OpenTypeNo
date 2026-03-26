@@ -4,7 +4,7 @@
 
 **免费、开源、隐私优先的 macOS 语音输入工具。**
 
-![OpenTypeNo 宣传图](assets/hero.webp)
+![OpenTypeNo 宣传图](assets/hero.png)
 
 一个极简的 macOS 语音输入应用。按下 Control 说话，OpenTypeNo 在本地完成转录，然后自动粘贴到你正在使用的应用中——全程不到一秒。
 

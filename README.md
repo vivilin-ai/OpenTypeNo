@@ -4,7 +4,7 @@
 
 **A free, open source, privacy-first voice input tool for macOS.**
 
-![OpenTypeNo hero image](assets/hero.webp)
+![OpenTypeNo hero image](assets/hero.png)
 
 A minimal macOS voice input app. OpenTypeNo captures your voice, transcribes it locally, and pastes the result into whatever app you were using — all in under a second.
 

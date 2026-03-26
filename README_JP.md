@@ -4,7 +4,7 @@
 
 **無料・オープンソース・プライバシー優先の macOS 音声入力ツール。**
 
-![OpenTypeNo hero image](assets/hero.webp)
+![OpenTypeNo hero image](assets/hero.png)
 
 ミニマルな macOS 音声入力アプリ。OpenTypeNo はあなたの声をキャプチャし、ローカルで文字起こしし、使用中のアプリに自動ペーストします — すべて1秒以内。
 
