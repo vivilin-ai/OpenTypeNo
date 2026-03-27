@@ -232,7 +232,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             stopRecording()
         case .done:
             appState.confirmInsert()
-        case .transcribing, .postProcessing, .error:
+        case .transcribing, .postProcessing, .downloadingModels, .error:
             appState.cancel()
         case .permissions, .missingColi, .installingColi, .updating:
             break
@@ -360,6 +360,7 @@ enum AppPhase: Equatable {
     case recording
     case transcribing(String = "Transcribing...")
     case postProcessing
+    case downloadingModels
     case done(String)        // transcription result, waiting for user confirm
     case permissions(Set<PermissionKind>)
     case missingColi
@@ -374,6 +375,7 @@ enum AppPhase: Equatable {
         case .transcribing(let message):
             message == "Transcribing..." ? L("Transcribing...", "转录中...") : message
         case .postProcessing: L("Optimizing...", "优化中...")
+        case .downloadingModels: L("Downloading speech models...", "下载语音模型中...")
         case .done(let text): text
         case .permissions, .missingColi, .installingColi: ""
         case .updating(let message): message
@@ -478,8 +480,24 @@ final class AppState: ObservableObject {
                 }
                 // Verify installation
                 if ColiASRService.isInstalled {
-                    phase = .idle
-                    onOverlayRequest?(false)
+                    // Start async model download in background
+                    Task { [weak self] in
+                        do {
+                            self?.phase = .downloadingModels
+                            self?.onOverlayRequest?(true)
+                            try await ColiASRService.ensureModels { [weak self] message in
+                                self?.phase = .downloadingModels
+                            }
+                            // Download complete
+                            self?.phase = .idle
+                            self?.onOverlayRequest?(false)
+                        } catch {
+                            // Model download failed, but coli is installed
+                            // User can still use it (models will download on first use)
+                            self?.phase = .idle
+                            self?.onOverlayRequest?(false)
+                        }
+                    }
                 } else {
                     // Fallback to manual guidance
                     phase = .missingColi
@@ -508,12 +526,28 @@ final class AppState: ObservableObject {
             return
         }
 
+        // Select ASR service based on user setting
+        let isLocalMode = UserDefaults.standard.asrMode == .local
+
+        // Check if models need to be downloaded (local mode only)
+        if isLocalMode && !ColiASRService.isModelDownloaded {
+            phase = .downloadingModels
+            onOverlayRequest?(true)
+            do {
+                try await ColiASRService.ensureModels { [weak self] _ in
+                    self?.phase = .downloadingModels
+                }
+            } catch {
+                showError("Failed to download models: \(error.localizedDescription)")
+                return
+            }
+        }
+
         phase = .transcribing()
 
-        // Select ASR service based on user setting
-        let service: any ASRServiceProtocol = UserDefaults.standard.asrMode == .cloud
-            ? CloudASRService()
-            : ColiASRService()
+        let service: any ASRServiceProtocol = isLocalMode
+            ? ColiASRService()
+            : CloudASRService()
 
         do {
             var text = try await service.transcribe(fileURL: url)
@@ -587,12 +621,29 @@ final class AppState: ObservableObject {
 
     func transcribeFile(_ url: URL) async {
         previousApp = NSWorkspace.shared.frontmostApplication
+
+        let isLocalMode = UserDefaults.standard.asrMode == .local
+
+        // Check if models need to be downloaded (local mode only)
+        if isLocalMode && !ColiASRService.isModelDownloaded {
+            phase = .downloadingModels
+            onOverlayRequest?(true)
+            do {
+                try await ColiASRService.ensureModels { [weak self] _ in
+                    self?.phase = .downloadingModels
+                }
+            } catch {
+                showError("Failed to download models: \(error.localizedDescription)")
+                return
+            }
+        }
+
         phase = .transcribing()
         onOverlayRequest?(true)
 
-        let service: any ASRServiceProtocol = UserDefaults.standard.asrMode == .cloud
-            ? CloudASRService()
-            : ColiASRService()
+        let service: any ASRServiceProtocol = isLocalMode
+            ? ColiASRService()
+            : CloudASRService()
 
         do {
             var text = try await service.transcribe(fileURL: url)
@@ -797,6 +848,102 @@ final class ColiASRService: @unchecked Sendable {
 
     static var isNpmAvailable: Bool {
         findNpmPath() != nil
+    }
+
+    /// Check if SenseVoice model is downloaded
+    static var isModelDownloaded: Bool {
+        let home = ProcessInfo.processInfo.environment["HOME"] ?? ""
+        let modelPath = (home as NSString).appendingPathComponent(".coli/models/sensevoice")
+        return FileManager.default.fileExists(atPath: modelPath)
+    }
+
+    /// Download models in background using Node.js script
+    static func ensureModels(onProgress: @MainActor @Sendable @escaping (String) -> Void) async throws {
+        guard let nodePath = findNodePath() else {
+            throw OpenTypeNoError.npmNotFound
+        }
+
+        await onProgress(L("Downloading speech models...", "下载语音模型中..."))
+
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    // Create temporary Node.js script
+                    let script = """
+                    const { ensureModels } = require('@marswave/coli');
+                    (async () => {
+                      try {
+                        await ensureModels(['sensevoice']);
+                        process.exit(0);
+                      } catch (err) {
+                        console.error(err);
+                        process.exit(1);
+                      }
+                    })();
+                    """
+                    let tempDir = FileManager.default.temporaryDirectory
+                    let scriptPath = tempDir.appendingPathComponent("ensure_models_\(UUID().uuidString).js")
+                    try script.write(to: scriptPath, atomically: true, encoding: .utf8)
+
+                    let process = Process()
+                    process.executableURL = URL(fileURLWithPath: nodePath)
+                    process.arguments = [scriptPath.path]
+
+                    // Set up environment
+                    let nodeDir = (nodePath as NSString).deletingLastPathComponent
+                    let env = ProcessInfo.processInfo.environment
+                    let home = env["HOME"] ?? ""
+                    let extraPaths = [
+                        nodeDir,
+                        "/opt/homebrew/bin",
+                        "/usr/local/bin",
+                        home + "/.nvm/current/bin",
+                        home + "/.volta/bin",
+                        home + "/.local/share/fnm/aliases/default/bin"
+                    ]
+                    var processEnv = env
+                    let existingPath = env["PATH"] ?? "/usr/bin:/bin"
+                    processEnv["PATH"] = (extraPaths + [existingPath]).joined(separator: ":")
+                    process.environment = processEnv
+
+                    let stdout = Pipe()
+                    let stderr = Pipe()
+                    process.standardOutput = stdout
+                    process.standardError = stderr
+
+                    let stderrBuf = LockedData()
+                    let stderrHandle = stderr.fileHandleForReading
+                    stderrHandle.readabilityHandler = { handle in
+                        let data = handle.availableData
+                        if !data.isEmpty { stderrBuf.append(data) }
+                    }
+
+                    try process.run()
+
+                    // 10-minute timeout for model download
+                    let timeoutItem = DispatchWorkItem {
+                        if process.isRunning { process.terminate() }
+                    }
+                    DispatchQueue.global().asyncAfter(deadline: .now() + 600, execute: timeoutItem)
+
+                    process.waitUntilExit()
+                    timeoutItem.cancel()
+                    stderrHandle.readabilityHandler = nil
+
+                    // Clean up temp script
+                    try? FileManager.default.removeItem(at: scriptPath)
+
+                    guard process.terminationStatus == 0 else {
+                        let errorOutput = String(data: stderrBuf.read(), encoding: .utf8) ?? ""
+                        throw OpenTypeNoError.transcriptionFailed("Model download failed: \(errorOutput)")
+                    }
+
+                    continuation.resume()
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
     }
 
     /// Auto-install coli via npm. Reports progress via callback.
@@ -1037,6 +1184,30 @@ final class ColiASRService: @unchecked Sendable {
         }
 
         return resolveViaShell("npm")
+    }
+
+    static func findNodePath() -> String? {
+        let env = ProcessInfo.processInfo.environment
+        let home = env["HOME"] ?? ""
+
+        if let pathInEnv = executableInPath(named: "node", path: env["PATH"]) {
+            return pathInEnv
+        }
+
+        let candidates = [
+            "/opt/homebrew/bin/node",
+            "/usr/local/bin/node",
+            home + "/.nvm/current/bin/node",
+            home + "/.volta/bin/node",
+            home + "/.local/share/fnm/aliases/default/bin/node",
+            home + "/.bun/bin/node"
+        ]
+
+        if let found = candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) {
+            return found
+        }
+
+        return resolveViaShell("node")
     }
 
     private static func findColiPath() -> String? {
@@ -1618,6 +1789,11 @@ struct OverlayView: View {
             }
 
             if case .postProcessing = appState.phase {
+                ProgressView()
+                    .controlSize(.small)
+            }
+
+            if case .downloadingModels = appState.phase {
                 ProgressView()
                     .controlSize(.small)
             }
