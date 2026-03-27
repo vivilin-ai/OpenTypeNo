@@ -33,9 +33,13 @@ OpenTypeNo 已通过 Apple 签名和公证，可以直接打开使用。
 
 ### 安装语音识别引擎
 
-OpenTypeNo 使用 [coli](https://github.com/marswaveai/coli) 进行本地语音识别：
+OpenTypeNo 使用 [coli](https://github.com/marswaveai/coli) 进行本地语音识别。你需要安装 `Node.js` 和 `ffmpeg`：
 
 ```bash
+# 安装 ffmpeg
+brew install ffmpeg
+
+# 安装 Coli
 npm install -g @marswave/coli
 ```
 
@@ -48,6 +52,8 @@ OpenTypeNo 需要两个一次性授权：
 - **辅助功能** — 将文字粘贴到应用中
 
 首次启动时，应用会自动引导你完成授权。
+
+> **注意**：在完全**首次使用**进行本地转录时，应用会在后台自动下载所需的语音识别模型。此过程受网速影响可能会耗费几分钟，界面会显示“下载语音模型中”的提示。模型只需下载一次，之后的所有转录瞬间即可完成！
 
 ### 方式二：从源码构建
 

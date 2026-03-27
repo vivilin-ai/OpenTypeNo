@@ -34,9 +34,13 @@ OpenTypeNo is signed and notarized by Apple — it should open without any warni
 
 ### Install the speech engine
 
-OpenTypeNo uses [coli](https://github.com/marswaveai/coli) for local speech recognition:
+OpenTypeNo uses [coli](https://github.com/marswaveai/coli) for local speech recognition. It requires `Node.js` and `ffmpeg`:
 
 ```bash
+# Install ffmpeg
+brew install ffmpeg
+
+# Install Coli
 npm install -g @marswave/coli
 ```
 
@@ -49,6 +53,8 @@ OpenTypeNo needs two one-time permissions:
 - **Accessibility** — to paste text into apps
 
 The app will guide you through granting these on first launch.
+
+> **Note**: On the very first use, the app will automatically download the local speech model in the background. This may take a few minutes depending on your network connection, and a progress indicator will be shown. Once downloaded, all future transcriptions will be instant.
 
 ### Option 2 — Build from Source
 
